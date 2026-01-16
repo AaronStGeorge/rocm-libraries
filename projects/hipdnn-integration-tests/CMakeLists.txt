@@ -7,22 +7,43 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(hip REQUIRED)
 find_package(hipdnn_data_sdk REQUIRED)
 find_package(hipdnn_backend REQUIRED)
+find_package(hipdnn_test_sdk REQUIRED)
+find_package(hipdnn_plugin_sdk REQUIRED)
+find_package(hipdnn_frontend REQUIRED)
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
 add_executable(hipdnn_integration_tests
+    src/main.cpp
     src/list_plugins_test.cpp
+    src/IntegrationGpuConvForward.cpp
+    src/IntegrationGpuConvBackwardData.cpp
+    src/IntegrationGpuConvBackwardWeights.cpp
+    src/IntegrationGpuConvFwdBiasActiv.cpp
+    src/IntegrationGpuBatchnormForwardInference.cpp
+    src/IntegrationGpuBatchnormForwardTraining.cpp
+    src/IntegrationGpuBatchnormFwdPlusActive.cpp
+    src/IntegrationGpuBatchnormFwdTrainingActiv.cpp
+    src/IntegrationGpuBatchnormBackward.cpp
+    src/IntegrationGpuBatchnormBackwardActivation.cpp
 )
+
+target_include_directories(hipdnn_integration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 target_link_libraries(hipdnn_integration_tests
     PRIVATE
         hip::host
         hipdnn_data_sdk
         hipdnn_backend
+        hipdnn_test_sdk
+        hipdnn_plugin_sdk
+        hipdnn_frontend
         GTest::gtest
-        GTest::gtest_main
         Threads::Threads
 )
+
+# No PLUGIN_PATH compile definition - uses HIPDNN_TEST_PLUGIN_PATH env var
+# No add_dependencies on specific plugin - tests are plugin-agnostic
 
 include(GNUInstallDirs)
 install(TARGETS hipdnn_integration_tests
