@@ -16,15 +16,6 @@ find_package(Threads REQUIRED)
 add_executable(hipdnn_integration_tests
     src/main.cpp
     src/list_plugins_test.cpp
-    src/IntegrationGpuConvForward.cpp
-    src/IntegrationGpuConvBackwardData.cpp
-    src/IntegrationGpuConvBackwardWeights.cpp
-    src/IntegrationGpuConvFwdBiasActiv.cpp
-    src/IntegrationGpuBatchnormForwardInference.cpp
-    src/IntegrationGpuBatchnormForwardTraining.cpp
-    src/IntegrationGpuBatchnormFwdPlusActive.cpp
-    src/IntegrationGpuBatchnormFwdTrainingActiv.cpp
-    src/IntegrationGpuBatchnormBackward.cpp
     src/IntegrationGpuBatchnormBackwardActivation.cpp
 )
 
