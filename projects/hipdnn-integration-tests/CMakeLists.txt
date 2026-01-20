@@ -31,6 +31,7 @@ target_link_libraries(hipdnn_integration_tests
         hipdnn_frontend
         GTest::gtest
         Threads::Threads
+        ${CMAKE_DL_LIBS}
 )
 
 # No PLUGIN_PATH compile definition - uses HIPDNN_TEST_PLUGIN_PATH env var
