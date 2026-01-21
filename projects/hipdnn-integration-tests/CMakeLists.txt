@@ -18,6 +18,7 @@ add_executable(hipdnn_integration_tests
     src/common/EngineDiscovery.cpp
     src/list_plugins_test.cpp
     src/IntegrationGpuBatchnormBackwardActivation.cpp
+    src/IntegrationGpuConvForward.cpp
 )
 
 target_include_directories(hipdnn_integration_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)

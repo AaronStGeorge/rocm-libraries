@@ -7,7 +7,6 @@ SPDX-License-Identifier: MIT
 #include <spdlog/spdlog.h>
 
 #include <hipdnn_frontend.hpp>
-#include <hipdnn_test_sdk/utilities/HipErrorHandler.hpp>
 
 #include "common/EngineDiscovery.hpp"
 #include "common/TestGraphBuilders.hpp"
@@ -57,16 +56,16 @@ int main(int argc, char** argv)
     // Demonstrate capability queries BEFORE InitGoogleTest
     demonstrateCapabilityQueries();
 
-    // ::testing::InitGoogleTest(&argc, argv);
+    ::testing::InitGoogleTest(&argc, argv);
 
-    // hipdnn_frontend::initializeFrontendLogging();
+    hipdnn_frontend::initializeFrontendLogging();
 
-    // // Register HipErrorHandler to check and clear HIP errors after each test
+    // TODO: Re-enable after fixing hipErrorPeerAccessAlreadyEnabled issue from IREE
     // testing::TestEventListeners& listeners = testing::UnitTest::GetInstance()->listeners();
     // listeners.Append(new hipdnn_test_sdk::utilities::HipErrorHandler);
 
-    // auto result = RUN_ALL_TESTS();
-    // spdlog::shutdown();
-    // return result;
+    auto result = RUN_ALL_TESTS();
+    spdlog::shutdown();
+    return result;
     return 0;
 }

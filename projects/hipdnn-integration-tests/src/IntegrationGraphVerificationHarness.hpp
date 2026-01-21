@@ -69,10 +69,7 @@ protected:
         }
     }
 
-    virtual void runGraphTest(DataType tolerance,
-                              const hipdnn_data_sdk::utilities::TensorLayout& layout
-                              = hipdnn_data_sdk::utilities::TensorLayout::NCHW)
-        = 0;
+    virtual void runGraphTest(DataType tolerance) = 0;
 
 protected:
     void verifyGraph(hipdnn_frontend::graph::Graph& graph, unsigned int seed)

@@ -13,6 +13,8 @@
 
 #include "common/ActivationCommon.hpp"
 #include "common/BatchnormCommon.hpp"
+#include "common/EngineDiscovery.hpp"
+#include "common/FilteredCombine.hpp"
 #include "IntegrationGraphVerificationHarness.hpp"
 
 using namespace hipdnn_frontend;
@@ -34,38 +36,28 @@ struct BatchnormActivationTensorIds
     static constexpr int64_t DY_UID = 6;
 };
 
+// Inner param type (without engine ID)
+using BnBwdActivInnerParam
+    = std::tuple<TensorLayout, test_bn_common::BatchnormTestCase, test_activation_common::ActivTestCase>;
+
 template <typename DataType>
 class BatchnormBackwardActivation
-    : public IntegrationGraphVerificationHarness<
-          DataType,
-          std::tuple<test_bn_common::BatchnormTestCase, test_activation_common::ActivTestCase>>
+    : public IntegrationGraphVerificationHarness<DataType, std::tuple<int64_t, BnBwdActivInnerParam>>
 {
-protected:
-    void initializeBundle([[maybe_unused]] const graph::Graph& graph,
-                          GraphTensorBundle& bundle,
-                          unsigned int seed) override
+public:
+    struct GraphOutputs
     {
-        bundle.tensors.at(BatchnormActivationTensorIds::X_UID)
-            ->fillTensorWithRandomValues(-1.0f, 1.0f, seed);
-        bundle.tensors.at(BatchnormActivationTensorIds::DY_UID)
-            ->fillTensorWithRandomValues(-1.0f, 1.0f, seed);
-        bundle.tensors.at(BatchnormActivationTensorIds::SCALE_UID)
-            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
-        bundle.tensors.at(BatchnormActivationTensorIds::BIAS_UID)
-            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
-        bundle.tensors.at(BatchnormActivationTensorIds::MEAN_UID)
-            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
-        bundle.tensors.at(BatchnormActivationTensorIds::INV_VARIANCE_UID)
-            ->fillTensorWithRandomValues(1.9f, 2.0f, seed);
-    }
+        std::shared_ptr<graph::TensorAttributes> dx;
+        std::shared_ptr<graph::TensorAttributes> dscale;
+        std::shared_ptr<graph::TensorAttributes> dbias;
+    };
 
-    void runGraphTest([[maybe_unused]] DataType tolerance, const TensorLayout& layout) override
+    static std::pair<graph::Graph, GraphOutputs> buildGraph(const BnBwdActivInnerParam& tc)
     {
         namespace fe = hipdnn_frontend;
 
-        const auto& [bnTestCase, activTestCase] = this->GetParam();
+        const auto& [layout, bnTestCase, activTestCase] = tc;
         auto dims = bnTestCase.dims;
-
         std::vector<int64_t> channelDims = getDerivedShape(dims);
 
         graph::Graph graphObj;
@@ -178,228 +170,209 @@ protected:
         dbiasOut->set_data_type(intermediateDataType);
         dbiasOut->set_output(true);
 
-        auto intermediateTolerance = batchnorm::getToleranceBackward<float>();
+        auto result = graphObj.validate();
+        if(result.code != hipdnn_frontend::ErrorCode::OK)
+        {
+            throw std::runtime_error("Failed to validate graph: " + result.get_message());
+        }
 
-        this->registerValidator(dxOut, static_cast<float>(tolerance));
-        this->registerValidator(dscaleOut, intermediateTolerance);
-        this->registerValidator(dbiasOut, intermediateTolerance);
+        return std::make_pair(std::move(graphObj), GraphOutputs{dxOut, dscaleOut, dbiasOut});
+    }
+
+    static flatbuffers::DetachedBuffer buildGraphForTestCase(const BnBwdActivInnerParam& tc)
+    {
+        auto [graphObj, outputs] = buildGraph(tc);
+        return graphObj.buildFlatbufferOperationGraph();
+    }
+
+protected:
+    void initializeBundle([[maybe_unused]] const graph::Graph& graph,
+                          GraphTensorBundle& bundle,
+                          unsigned int seed) override
+    {
+        bundle.tensors.at(BatchnormActivationTensorIds::X_UID)
+            ->fillTensorWithRandomValues(-1.0f, 1.0f, seed);
+        bundle.tensors.at(BatchnormActivationTensorIds::DY_UID)
+            ->fillTensorWithRandomValues(-1.0f, 1.0f, seed);
+        bundle.tensors.at(BatchnormActivationTensorIds::SCALE_UID)
+            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
+        bundle.tensors.at(BatchnormActivationTensorIds::BIAS_UID)
+            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
+        bundle.tensors.at(BatchnormActivationTensorIds::MEAN_UID)
+            ->fillTensorWithRandomValues(-0.1f, 0.1f, seed);
+        bundle.tensors.at(BatchnormActivationTensorIds::INV_VARIANCE_UID)
+            ->fillTensorWithRandomValues(1.9f, 2.0f, seed);
+    }
+
+    void runGraphTest([[maybe_unused]] DataType tolerance) override
+    {
+        const auto& [engineId, innerParam] = this->GetParam();
+        const auto& [layout, bnTestCase, activTestCase] = innerParam;
+
+        auto [graphObj, outputs] = buildGraph(innerParam);
+
+        // Register validators
+        auto intermediateTolerance = batchnorm::getToleranceBackward<float>();
+        this->registerValidator(outputs.dx, static_cast<float>(tolerance));
+        this->registerValidator(outputs.dscale, intermediateTolerance);
+        this->registerValidator(outputs.dbias, intermediateTolerance);
+
+        // Force execution on the specific engine that claimed capability
+        graphObj.set_preferred_engine_id_ext(engineId);
 
         this->verifyGraph(graphObj, bnTestCase.seed);
     }
 };
 
-using IntegrationGpuBatchnormBackwardActivationNchwFp32 = BatchnormBackwardActivation<float>;
+// 2D layout tests (NCHW, NHWC)
+using IntegrationGpuBatchnormBackwardActivation2dFp32 = BatchnormBackwardActivation<float>;
+using IntegrationGpuBatchnormBackwardActivation2dBfp16 = BatchnormBackwardActivation<hip_bfloat16>;
+using IntegrationGpuBatchnormBackwardActivation2dFp16 = BatchnormBackwardActivation<half>;
 
-using IntegrationGpuBatchnormBackwardActivationNchwBfp16
-    = BatchnormBackwardActivation<hip_bfloat16>;
-
-using IntegrationGpuBatchnormBackwardActivationNchwFp16 = BatchnormBackwardActivation<half>;
-
-using IntegrationGpuBatchnormBackwardActivationNhwcFp32 = BatchnormBackwardActivation<float>;
-
-using IntegrationGpuBatchnormBackwardActivationNhwcBfp16
-    = BatchnormBackwardActivation<hip_bfloat16>;
-
-using IntegrationGpuBatchnormBackwardActivationNhwcFp16 = BatchnormBackwardActivation<half>;
-
-using IntegrationGpuBatchnormBackwardActivationNcdhwFp32 = BatchnormBackwardActivation<float>;
-
-using IntegrationGpuBatchnormBackwardActivationNcdhwBfp16
-    = BatchnormBackwardActivation<hip_bfloat16>;
-
-using IntegrationGpuBatchnormBackwardActivationNcdhwFp16 = BatchnormBackwardActivation<half>;
-
-using IntegrationGpuBatchnormBackwardActivationNdhwcFp32 = BatchnormBackwardActivation<float>;
-
-using IntegrationGpuBatchnormBackwardActivationNdhwcBfp16
-    = BatchnormBackwardActivation<hip_bfloat16>;
-
-using IntegrationGpuBatchnormBackwardActivationNdhwcFp16 = BatchnormBackwardActivation<half>;
+// 3D layout tests (NCDHW, NDHWC)
+using IntegrationGpuBatchnormBackwardActivation3dFp32 = BatchnormBackwardActivation<float>;
+using IntegrationGpuBatchnormBackwardActivation3dBfp16 = BatchnormBackwardActivation<hip_bfloat16>;
+using IntegrationGpuBatchnormBackwardActivation3dFp16 = BatchnormBackwardActivation<half>;
 
 } // namespace
 
-TEST_P(IntegrationGpuBatchnormBackwardActivationNchwFp32, Correctness)
+// 2D tests - Fp32
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation2dFp32);
+TEST_P(IntegrationGpuBatchnormBackwardActivation2dFp32, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<float>(), TensorLayout::NCHW);
+    runGraphTest(batchnorm::getToleranceBackward<float>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNchwFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dFp32,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
 INSTANTIATE_TEST_SUITE_P(
     Full,
-    IntegrationGpuBatchnormBackwardActivationNchwFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dFp32,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
-TEST_P(IntegrationGpuBatchnormBackwardActivationNchwBfp16, Correctness)
+// 2D tests - Bfp16
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation2dBfp16);
+TEST_P(IntegrationGpuBatchnormBackwardActivation2dBfp16, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>(), TensorLayout::NCHW);
+    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNchwBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dBfp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
 INSTANTIATE_TEST_SUITE_P(
     Full,
-    IntegrationGpuBatchnormBackwardActivationNchwBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dBfp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
-TEST_P(IntegrationGpuBatchnormBackwardActivationNchwFp16, Correctness)
+// 2D tests - Fp16
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation2dFp16);
+TEST_P(IntegrationGpuBatchnormBackwardActivation2dFp16, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<half>(), TensorLayout::NCHW);
+    runGraphTest(batchnorm::getToleranceBackward<half>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNchwFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dFp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
 INSTANTIATE_TEST_SUITE_P(
     Full,
-    IntegrationGpuBatchnormBackwardActivationNchwFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation2dFp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
+            testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
-TEST_P(IntegrationGpuBatchnormBackwardActivationNhwcFp32, Correctness)
+// 3D tests - Fp32
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation3dFp32);
+TEST_P(IntegrationGpuBatchnormBackwardActivation3dFp32, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<float>(), TensorLayout::NHWC);
+    runGraphTest(batchnorm::getToleranceBackward<float>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNhwcFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation3dFp32,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp32,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
+            testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
-INSTANTIATE_TEST_SUITE_P(
-    Full,
-    IntegrationGpuBatchnormBackwardActivationNhwcFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNhwcBfp16, Correctness)
+// 3D tests - Bfp16
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation3dBfp16);
+TEST_P(IntegrationGpuBatchnormBackwardActivation3dBfp16, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>(), TensorLayout::NHWC);
+    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNhwcBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation3dBfp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dBfp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
+            testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
 
-INSTANTIATE_TEST_SUITE_P(
-    Full,
-    IntegrationGpuBatchnormBackwardActivationNhwcBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNhwcFp16, Correctness)
+// 3D tests - Fp16
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(IntegrationGpuBatchnormBackwardActivation3dFp16);
+TEST_P(IntegrationGpuBatchnormBackwardActivation3dFp16, Correctness)
 {
-    runGraphTest(batchnorm::getToleranceBackward<half>(), TensorLayout::NHWC);
+    runGraphTest(batchnorm::getToleranceBackward<half>());
 }
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
-    IntegrationGpuBatchnormBackwardActivationNhwcFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-INSTANTIATE_TEST_SUITE_P(
-    Full,
-    IntegrationGpuBatchnormBackwardActivationNhwcFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNcdhwFp32, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<float>(), TensorLayout::NCDHW);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNcdhwFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNcdhwBfp16, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>(), TensorLayout::NCDHW);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNcdhwBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNcdhwFp16, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<half>(), TensorLayout::NCDHW);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNcdhwFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNdhwcFp32, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<float>(), TensorLayout::NDHWC);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNdhwcFp32,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNdhwcBfp16, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<hip_bfloat16>(), TensorLayout::NDHWC);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNdhwcBfp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
-
-TEST_P(IntegrationGpuBatchnormBackwardActivationNdhwcFp16, Correctness)
-{
-    runGraphTest(batchnorm::getToleranceBackward<half>(), TensorLayout::NDHWC);
-}
-
-INSTANTIATE_TEST_SUITE_P(
-    Smoke,
-    IntegrationGpuBatchnormBackwardActivationNdhwcFp16,
-    testing::Combine(
-        testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
-        testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())));
+    IntegrationGpuBatchnormBackwardActivation3dFp16,
+    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp16,
+                                      BnBwdActivInnerParam>(
+        EngineDiscovery::discoverAllEngines(),
+        testing::Combine(
+            testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
+            testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
+            testing::ValuesIn(test_activation_common::createBatchnormBwdActivationTestCases())))));
