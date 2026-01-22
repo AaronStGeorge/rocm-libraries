@@ -18,7 +18,12 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <nlohmann/json.hpp>
+#include <set>
+#include <vector>
 
 namespace hipdnn_integration_tests
 {
@@ -44,25 +49,119 @@ protected:
         ASSERT_EQ(hipInit(0), hipSuccess);
         ASSERT_EQ(hipGetDevice(&_deviceId), hipSuccess);
 
-        // Read plugin path from environment variable
-        const char* pluginPathEnv = std::getenv("HIPDNN_TEST_PLUGIN_PATH");
-        if(pluginPathEnv == nullptr || std::strlen(pluginPathEnv) == 0)
-        {
-            GTEST_SKIP() << "HIPDNN_TEST_PLUGIN_PATH environment variable not set";
-        }
-
-        // Note: The plugin paths has to be set before we create the hipdnn handle.
-        auto pluginPath = std::filesystem::weakly_canonical(pluginPathEnv);
-        const std::string pluginPathStr = pluginPath.string();
-        const std::array<const char*, 1> paths = {pluginPathStr.c_str()};
-        ASSERT_EQ(hipdnnSetEnginePluginPaths_ext(
-                      paths.size(), paths.data(), HIPDNN_PLUGIN_LOADING_ABSOLUTE),
-                  HIPDNN_STATUS_SUCCESS);
-
-        // Create handle and stream
+        // Create handle and stream (hipDNN auto-loads plugins from standard path)
         ASSERT_EQ(hipdnnCreate(&_handle), HIPDNN_STATUS_SUCCESS);
         ASSERT_EQ(hipStreamCreate(&_stream), hipSuccess);
         ASSERT_EQ(hipdnnSetStream(_handle, _stream), HIPDNN_STATUS_SUCCESS);
+
+        // Verify loaded plugins exactly match expected plugins
+        verifyExpectedPlugins();
+    }
+
+    // TODO: Extract config parsing into a dedicated TestConfig class that can be
+    // hydrated from JSON and reused across test infrastructure.
+    void verifyExpectedPlugins()
+    {
+        const char* configPathEnv = std::getenv("HIPDNN_TEST_CONFIG_PATH");
+        if(configPathEnv == nullptr || std::strlen(configPathEnv) == 0)
+        {
+            FAIL() << "HIPDNN_TEST_CONFIG_PATH environment variable not set";
+        }
+
+        std::filesystem::path configPath = std::filesystem::weakly_canonical(configPathEnv);
+
+        // Parse JSON config
+        std::ifstream configFile(configPath);
+        if(!configFile.is_open())
+        {
+            FAIL() << "Failed to open config file: " << configPath;
+        }
+
+        nlohmann::json config;
+        try
+        {
+            config = nlohmann::json::parse(configFile);
+        }
+        catch(const nlohmann::json::parse_error& e)
+        {
+            FAIL() << "Failed to parse config JSON: " << e.what();
+        }
+
+        // Extract expected plugin filenames
+        std::set<std::string> expectedPlugins;
+        if(config.contains("plugins"))
+        {
+            for(const auto& [name, info] : config["plugins"].items())
+            {
+                if(info.contains("path"))
+                {
+                    // Config contains filenames only (e.g., "libfusilli_plugin.so")
+                    expectedPlugins.insert(info["path"].get<std::string>());
+                }
+            }
+        }
+
+        // Get actual loaded plugin filenames
+        auto loadedPlugins = getLoadedPluginFilenames();
+
+        // Verify exact match
+        if(expectedPlugins != loadedPlugins)
+        {
+            FAIL() << "Plugin mismatch!\n"
+                   << "  Expected: " << formatPluginSet(expectedPlugins) << "\n"
+                   << "  Loaded:   " << formatPluginSet(loadedPlugins);
+        }
+    }
+
+    std::set<std::string> getLoadedPluginFilenames()
+    {
+        size_t numPlugins    = 0;
+        size_t maxPathLength = 0;
+        auto   status
+            = hipdnnGetLoadedEnginePluginPaths_ext(_handle, &numPlugins, nullptr, &maxPathLength);
+
+        if(status != HIPDNN_STATUS_SUCCESS || numPlugins == 0)
+        {
+            return {};
+        }
+
+        std::vector<std::vector<char>> pathBuffers(numPlugins, std::vector<char>(maxPathLength));
+        std::vector<char*>             pluginPathsC(numPlugins);
+        for(size_t i = 0; i < numPlugins; ++i)
+        {
+            pluginPathsC[i] = pathBuffers[i].data();
+        }
+
+        status = hipdnnGetLoadedEnginePluginPaths_ext(
+            _handle, &numPlugins, pluginPathsC.data(), &maxPathLength);
+        if(status != HIPDNN_STATUS_SUCCESS)
+        {
+            return {};
+        }
+
+        std::set<std::string> filenames;
+        for(size_t i = 0; i < numPlugins; ++i)
+        {
+            std::filesystem::path pluginPath =
+                std::filesystem::canonical(pluginPathsC[i]);
+            filenames.insert(pluginPath.filename().string());
+        }
+        return filenames;
+    }
+
+    static std::string formatPluginSet(const std::set<std::string>& plugins)
+    {
+        std::string result = "[";
+        bool        first  = true;
+        for(const auto& p : plugins)
+        {
+            if(!first)
+                result += ", ";
+            result += p;
+            first = false;
+        }
+        result += "]";
+        return result;
     }
 
     void TearDown() override

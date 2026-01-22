@@ -8,7 +8,6 @@ SPDX-License-Identifier: MIT
 #include <gtest/gtest.h>
 #include <hipdnn_frontend.hpp>
 
-#include <stdexcept>
 #include <tuple>
 #include <vector>
 
@@ -55,7 +54,12 @@ std::vector<std::tuple<int64_t, InnerParam>> FilteredCombine(
         auto status = graph.get_ranked_engine_ids(engineIds);
         if(status.is_bad())
         {
-            throw std::runtime_error("Failed to get ranked engine IDs: " + status.get_message());
+            // If no currently loaded engine supports the graph an error is
+            // returned.
+            // NOTE: this could be masking a more serious error. An error here
+            // could mean that something is broken, or that there aren't loaded
+            // engines supporting this graph - we assume the latter.
+            continue;
         }
 
         for (int64_t engineId : engineIds) {

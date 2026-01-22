@@ -12,6 +12,7 @@ find_package(hipdnn_plugin_sdk REQUIRED)
 find_package(hipdnn_frontend REQUIRED)
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
+find_package(nlohmann_json REQUIRED)
 
 add_executable(hipdnn_integration_tests
     src/main.cpp
@@ -32,6 +33,7 @@ target_link_libraries(hipdnn_integration_tests
         hipdnn_frontend
         GTest::gtest
         Threads::Threads
+        nlohmann_json::nlohmann_json
 )
 
 # No PLUGIN_PATH compile definition - uses HIPDNN_TEST_PLUGIN_PATH env var
