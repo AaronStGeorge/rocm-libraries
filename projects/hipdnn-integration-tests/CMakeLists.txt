@@ -15,7 +15,6 @@ find_package(Threads REQUIRED)
 
 add_executable(hipdnn_integration_tests
     src/main.cpp
-    src/common/EngineDiscovery.cpp
     src/list_plugins_test.cpp
     src/IntegrationGpuBatchnormBackwardActivation.cpp
     src/IntegrationGpuConvForward.cpp
@@ -33,7 +32,6 @@ target_link_libraries(hipdnn_integration_tests
         hipdnn_frontend
         GTest::gtest
         Threads::Threads
-        ${CMAKE_DL_LIBS}
 )
 
 # No PLUGIN_PATH compile definition - uses HIPDNN_TEST_PLUGIN_PATH env var

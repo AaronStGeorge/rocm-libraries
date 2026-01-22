@@ -11,7 +11,6 @@
 #include <hipdnn_test_sdk/utilities/TestUtilities.hpp>
 
 #include "common/ConvolutionCommon.hpp"
-#include "common/EngineDiscovery.hpp"
 #include "common/FilteredCombine.hpp"
 #include "IntegrationGraphVerificationHarness.hpp"
 
@@ -36,7 +35,8 @@ public:
         std::shared_ptr<graph::TensorAttributes> y;
     };
 
-    static std::pair<graph::Graph, GraphOutputs> buildGraph(const ConvFwdInnerParam& tc)
+    static std::pair<graph::Graph, GraphOutputs> buildGraph(
+        hipdnnHandle_t handle, const ConvFwdInnerParam& tc)
     {
         const auto& [layout, testCase] = tc;
 
@@ -65,19 +65,19 @@ public:
         auto yAttr = graphObj.conv_fprop(xTensorAttr, wTensorAttr, convAttrs);
         yAttr->set_output(true);
 
-        auto result = graphObj.validate();
-        if(result.code != hipdnn_frontend::ErrorCode::OK)
+        auto validateResult = graphObj.validate();
+        if(validateResult.is_bad())
         {
-            throw std::runtime_error("Failed to validate graph: " + result.get_message());
+            throw std::runtime_error("Failed to validate graph: " + validateResult.get_message());
+        }
+
+        auto buildResult = graphObj.build_operation_graph(handle);
+        if(buildResult.is_bad())
+        {
+            throw std::runtime_error("Failed to build operation graph: " + buildResult.get_message());
         }
 
         return std::make_pair(std::move(graphObj), GraphOutputs{yAttr});
-    }
-
-    static flatbuffers::DetachedBuffer buildGraphForTestCase(const ConvFwdInnerParam& tc)
-    {
-        auto [graphObj, outputs] = buildGraph(tc);
-        return graphObj.buildFlatbufferOperationGraph();
     }
 
 protected:
@@ -88,7 +88,7 @@ protected:
         const auto& [engineId, innerParam] = this->GetParam();
         const auto& [layout, testCase] = innerParam;
 
-        auto [graphObj, outputs] = buildGraph(innerParam);
+        auto [graphObj, outputs] = buildGraph(this->_handle, innerParam);
 
         this->registerValidator(outputs.y, tolerance);
 
@@ -153,7 +153,6 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp32,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp32, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
 
@@ -161,7 +160,6 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dBfp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dBfp16, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
 
@@ -169,7 +167,6 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp16, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
 
@@ -178,7 +175,6 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp32,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp32, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))));
 
@@ -186,7 +182,6 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dBfp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dBfp16, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))));
 
@@ -194,6 +189,5 @@ INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp16, ConvFwdInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))));

@@ -13,7 +13,6 @@
 
 #include "common/ActivationCommon.hpp"
 #include "common/BatchnormCommon.hpp"
-#include "common/EngineDiscovery.hpp"
 #include "common/FilteredCombine.hpp"
 #include "IntegrationGraphVerificationHarness.hpp"
 
@@ -52,7 +51,8 @@ public:
         std::shared_ptr<graph::TensorAttributes> dbias;
     };
 
-    static std::pair<graph::Graph, GraphOutputs> buildGraph(const BnBwdActivInnerParam& tc)
+    static std::pair<graph::Graph, GraphOutputs> buildGraph(
+        hipdnnHandle_t handle, const BnBwdActivInnerParam& tc)
     {
         namespace fe = hipdnn_frontend;
 
@@ -170,19 +170,19 @@ public:
         dbiasOut->set_data_type(intermediateDataType);
         dbiasOut->set_output(true);
 
-        auto result = graphObj.validate();
-        if(result.code != hipdnn_frontend::ErrorCode::OK)
+        auto validateResult = graphObj.validate();
+        if(validateResult.is_bad())
         {
-            throw std::runtime_error("Failed to validate graph: " + result.get_message());
+            throw std::runtime_error("Failed to validate graph: " + validateResult.get_message());
+        }
+
+        auto buildResult = graphObj.build_operation_graph(handle);
+        if(buildResult.is_bad())
+        {
+            throw std::runtime_error("Failed to build operation graph: " + buildResult.get_message());
         }
 
         return std::make_pair(std::move(graphObj), GraphOutputs{dxOut, dscaleOut, dbiasOut});
-    }
-
-    static flatbuffers::DetachedBuffer buildGraphForTestCase(const BnBwdActivInnerParam& tc)
-    {
-        auto [graphObj, outputs] = buildGraph(tc);
-        return graphObj.buildFlatbufferOperationGraph();
     }
 
 protected:
@@ -209,7 +209,7 @@ protected:
         const auto& [engineId, innerParam] = this->GetParam();
         const auto& [layout, bnTestCase, activTestCase] = innerParam;
 
-        auto [graphObj, outputs] = buildGraph(innerParam);
+        auto [graphObj, outputs] = buildGraph(this->_handle, innerParam);
 
         // Register validators
         auto intermediateTolerance = batchnorm::getToleranceBackward<float>();
@@ -248,7 +248,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dFp32,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
@@ -259,7 +258,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dFp32,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
@@ -277,7 +275,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dBfp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
@@ -288,7 +285,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dBfp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
@@ -306,7 +302,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dFp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdTestCases()),
@@ -317,7 +312,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation2dFp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
             testing::ValuesIn(test_bn_common::getBnBwdFullTestCases()),
@@ -335,7 +329,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation3dFp32,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp32,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
             testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
@@ -353,7 +346,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation3dBfp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dBfp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
             testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),
@@ -371,7 +363,6 @@ INSTANTIATE_TEST_SUITE_P(
     IntegrationGpuBatchnormBackwardActivation3dFp16,
     testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp16,
                                       BnBwdActivInnerParam>(
-        EngineDiscovery::discoverAllEngines(),
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
             testing::ValuesIn(test_bn_common::getBnBwd3dTestCases()),

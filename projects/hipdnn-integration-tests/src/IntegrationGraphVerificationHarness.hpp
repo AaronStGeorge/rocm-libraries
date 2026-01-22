@@ -28,6 +28,14 @@ template <typename DataType, typename TestCaseType>
 class IntegrationGraphVerificationHarness : public ::testing::TestWithParam<TestCaseType>
 {
 protected:
+    hipdnnHandle_t _handle = nullptr;
+    hipStream_t _stream = nullptr;
+    int _deviceId = 0;
+    std::unordered_map<int64_t, std::string> _tensorIdToNameMap;
+    std::unordered_map<int64_t, std::unique_ptr<hipdnn_test_sdk::utilities::IReferenceValidation>>
+        _tensorIdToValidatorMap;
+    std::vector<std::function<void()>> _deferredValidators;
+
     void SetUp() override
     {
         SKIP_IF_NO_DEVICES();
@@ -71,7 +79,6 @@ protected:
 
     virtual void runGraphTest(DataType tolerance) = 0;
 
-protected:
     void verifyGraph(hipdnn_frontend::graph::Graph& graph, unsigned int seed)
     {
         hipdnn_test_sdk::utilities::GraphTensorBundle gpuBundle, cpuBundle;
@@ -235,13 +242,6 @@ private:
         return true;
     }
 
-    hipdnnHandle_t _handle = nullptr;
-    hipStream_t _stream = nullptr;
-    int _deviceId = 0;
-    std::unordered_map<int64_t, std::string> _tensorIdToNameMap;
-    std::unordered_map<int64_t, std::unique_ptr<hipdnn_test_sdk::utilities::IReferenceValidation>>
-        _tensorIdToValidatorMap;
-    std::vector<std::function<void()>> _deferredValidators;
 };
 
 // NOLINTEND (portability-template-virtual-member-function)
