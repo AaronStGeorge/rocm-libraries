@@ -15,6 +15,7 @@
 #include <hipdnn_test_sdk/utilities/VectorLoggingUtils.hpp>
 #include <hipdnn_test_sdk/utilities/cpu_graph_executor/CpuReferenceGraphExecutor.hpp>
 #include <hipdnn_test_sdk/utilities/cpu_graph_executor/GraphTensorBundle.hpp>
+#include <hipdnn_data_sdk/utilities/EngineNames.hpp>
 
 #include <cstdlib>
 #include <cstring>
@@ -27,6 +28,35 @@
 
 namespace hipdnn_integration_tests
 {
+
+// Test parameter that pairs an engine ID with a test case.
+// Used by FilteredCombine to return (engine, testCase) pairs where
+// the engine has been verified to support the test case's graph.
+template <typename TestCase>
+struct EngineTestCase
+{
+    int64_t engineId;
+    TestCase testCase;
+};
+
+// Name generator for EngineTestCase-parameterized tests.
+// Produces names like "Fusilli_0", "MIOpen_1", etc.
+// Falls back to numeric ID if engine name isn't registered.
+template <typename TestCase>
+std::string EngineTestNameGenerator(const testing::TestParamInfo<EngineTestCase<TestCase>>& info)
+{
+    std::string engineName;
+    // TODO: add fusilli plugin to rocm-libraries/projects/hipdnn/data_sdk/tests/utilities/TestEngineNames.cpp
+    try
+    {
+        engineName = std::string(hipdnn_data_sdk::utilities::getEngineNameFromId(info.param.engineId));
+    }
+    catch(const std::out_of_range&)
+    {
+        engineName = "Engine" + std::to_string(info.param.engineId);
+    }
+    return engineName + "_" + std::to_string(info.index);
+}
 
 // NOLINTBEGIN (portability-template-virtual-member-function)
 template <typename DataType, typename TestCaseType>

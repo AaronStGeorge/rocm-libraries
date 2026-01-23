@@ -13,41 +13,46 @@ SPDX-License-Identifier: MIT
 
 namespace hipdnn_integration_tests {
 
-/// Filters (engine, innerParam) combinations based on engine capability.
+// Forward declaration - defined in IntegrationGraphVerificationHarness.hpp
+template <typename TestCase>
+struct EngineTestCase;
+
+/// Filters (engine, testCase) combinations based on engine capability.
 ///
 /// For each test case, builds the graph and queries which engines support it
 /// using the frontend API's get_ranked_engine_ids().
 ///
 /// Usage:
 ///   INSTANTIATE_TEST_SUITE_P(Smoke, MyFixture,
-///       testing::ValuesIn(FilteredCombine<MyFixture>(
+///       testing::ValuesIn(FilteredCombine<MyFixture, TestCaseType>(
 ///           testing::Combine(
 ///               testing::Values(TensorLayout::NCHW),
-///               testing::ValuesIn(getTestCases())))));
+///               testing::ValuesIn(getTestCases())))),
+///       EngineTestNameGenerator<TestCaseType>);
 ///
 /// Requirements:
 ///   FixtureClass must provide:
 ///     static std::pair<graph::Graph, GraphOutputs> buildGraph(
-///         hipdnnHandle_t handle, const InnerParam& tc);
+///         hipdnnHandle_t handle, const TestCase& tc);
 ///
 ///   where buildGraph calls validate() and build_operation_graph(handle)
 ///   before returning.
 ///
-template <typename FixtureClass, typename InnerParam>
-std::vector<std::tuple<int64_t, InnerParam>> FilteredCombine(
-    testing::internal::ParamGenerator<InnerParam> innerGen) {
+template <typename FixtureClass, typename TestCase>
+std::vector<EngineTestCase<TestCase>> FilteredCombine(
+    testing::internal::ParamGenerator<TestCase> testCaseGen) {
 
-    std::vector<std::tuple<int64_t, InnerParam>> result;
+    std::vector<EngineTestCase<TestCase>> result;
 
     // Create handle for capability queries
     // Plugin loading is cached (singleton), so this is cheap after first call
     hipdnnHandle_t handle;
     hipdnnCreate(&handle);
 
-    for (auto it = innerGen.begin(); it != innerGen.end(); ++it) {
-        const InnerParam& inner = *it;
+    for (auto it = testCaseGen.begin(); it != testCaseGen.end(); ++it) {
+        const TestCase& testCase = *it;
 
-        auto [graph, outputs] = FixtureClass::buildGraph(handle, inner);
+        auto [graph, outputs] = FixtureClass::buildGraph(handle, testCase);
 
         // Query which engines support this graph
         std::vector<int64_t> engineIds;
@@ -63,7 +68,7 @@ std::vector<std::tuple<int64_t, InnerParam>> FilteredCombine(
         }
 
         for (int64_t engineId : engineIds) {
-            result.emplace_back(engineId, inner);
+            result.push_back(EngineTestCase<TestCase>{engineId, testCase});
         }
     }
 

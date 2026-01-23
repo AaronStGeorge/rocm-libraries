@@ -23,11 +23,10 @@ using namespace test_conv_common;
 namespace
 {
 
-// Inner param type (without engine ID) - includes layout
-using ConvFwdInnerParam = std::tuple<TensorLayout, test_conv_common::ConvTestCase>;
+using ConvFwdTestCase = std::tuple<TensorLayout, test_conv_common::ConvTestCase>;
 
 template <typename DataType>
-class ConvForward : public IntegrationGraphVerificationHarness<DataType, std::tuple<int64_t, ConvFwdInnerParam>>
+class ConvForward : public IntegrationGraphVerificationHarness<DataType, EngineTestCase<ConvFwdTestCase>>
 {
 public:
     struct GraphOutputs
@@ -36,7 +35,7 @@ public:
     };
 
     static std::pair<graph::Graph, GraphOutputs> buildGraph(
-        hipdnnHandle_t handle, const ConvFwdInnerParam& tc)
+        hipdnnHandle_t handle, const ConvFwdTestCase& tc)
     {
         const auto& [layout, testCase] = tc;
 
@@ -85,16 +84,16 @@ protected:
     {
         SKIP_IF_WINDOWS();
 
-        const auto& [engineId, innerParam] = this->GetParam();
-        const auto& [layout, testCase] = innerParam;
+        const auto& param = this->GetParam();
+        const auto& [layout, convTestCase] = param.testCase;
 
-        auto [graphObj, outputs] = buildGraph(this->_handle, innerParam);
+        auto [graphObj, outputs] = buildGraph(this->_handle, param.testCase);
 
         this->registerValidator(outputs.y, tolerance);
 
-        graphObj.set_preferred_engine_id_ext(engineId);
+        graphObj.set_preferred_engine_id_ext(param.engineId);
 
-        this->verifyGraph(graphObj, testCase.seed);
+        this->verifyGraph(graphObj, convTestCase.seed);
     }
 };
 
@@ -152,42 +151,48 @@ TEST_P(IntegrationGpuConvFwd3dFp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp32, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp32, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dBfp16, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dBfp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp16, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
 
 // 3D instantiations
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp32, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp32, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dBfp16, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dBfp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
 
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp16, ConvFwdInnerParam>(
+    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
-                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))));
+                         testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
+    EngineTestNameGenerator<ConvFwdTestCase>);
