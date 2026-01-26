@@ -17,14 +17,14 @@ namespace hipdnn_integration_tests {
 template <typename TestCase>
 struct EngineTestCase;
 
-/// Filters (engine, testCase) combinations based on engine capability.
+/// Builds a test matrix of (engine, testCase) pairs based on engine capability.
 ///
 /// For each test case, builds the graph and queries which engines support it
-/// using the frontend API's get_ranked_engine_ids().
+/// using hipDNN frontend `get_ranked_engine_ids`.
 ///
 /// Usage:
 ///   INSTANTIATE_TEST_SUITE_P(Smoke, MyFixture,
-///       testing::ValuesIn(FilteredCombine<MyFixture, TestCaseType>(
+///       testing::ValuesIn(BuildEngineTestMatrix<MyFixture, TestCaseType>(
 ///           testing::Combine(
 ///               testing::Values(TensorLayout::NCHW),
 ///               testing::ValuesIn(getTestCases())))),
@@ -37,9 +37,8 @@ struct EngineTestCase;
 ///
 ///   where buildGraph calls validate() and build_operation_graph(handle)
 ///   before returning.
-///
 template <typename FixtureClass, typename TestCase>
-std::vector<EngineTestCase<TestCase>> FilteredCombine(
+std::vector<EngineTestCase<TestCase>> BuildEngineTestMatrix(
     testing::internal::ParamGenerator<TestCase> testCaseGen) {
 
     std::vector<EngineTestCase<TestCase>> result;
@@ -49,9 +48,7 @@ std::vector<EngineTestCase<TestCase>> FilteredCombine(
     hipdnnHandle_t handle;
     hipdnnCreate(&handle);
 
-    for (auto it = testCaseGen.begin(); it != testCaseGen.end(); ++it) {
-        const TestCase& testCase = *it;
-
+    for (const auto& testCase : testCaseGen) {
         auto [graph, outputs] = FixtureClass::buildGraph(handle, testCase);
 
         // Query which engines support this graph

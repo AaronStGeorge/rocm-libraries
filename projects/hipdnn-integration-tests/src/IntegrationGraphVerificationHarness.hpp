@@ -30,7 +30,7 @@ namespace hipdnn_integration_tests
 {
 
 // Test parameter that pairs an engine ID with a test case.
-// Used by FilteredCombine to return (engine, testCase) pairs where
+// Used by BuildEngineTestMatrix to return (engine, testCase) pairs where
 // the engine has been verified to support the test case's graph.
 template <typename TestCase>
 struct EngineTestCase

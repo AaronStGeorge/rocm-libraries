@@ -13,7 +13,7 @@
 
 #include "common/ActivationCommon.hpp"
 #include "common/BatchnormCommon.hpp"
-#include "common/FilteredCombine.hpp"
+#include "common/BuildEngineTestMatrix.hpp"
 #include "IntegrationGraphVerificationHarness.hpp"
 
 using namespace hipdnn_frontend;
@@ -245,7 +245,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation2dFp32, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation2dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dFp32,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -256,7 +256,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Full,
     IntegrationGpuBatchnormBackwardActivation2dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp32,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dFp32,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -274,7 +274,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation2dBfp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation2dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dBfp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -285,7 +285,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Full,
     IntegrationGpuBatchnormBackwardActivation2dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dBfp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dBfp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -303,7 +303,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation2dFp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation2dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dFp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -314,7 +314,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Full,
     IntegrationGpuBatchnormBackwardActivation2dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation2dFp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation2dFp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
@@ -332,7 +332,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation3dFp32, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation3dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp32,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation3dFp32,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
@@ -350,7 +350,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation3dBfp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation3dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dBfp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation3dBfp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
@@ -368,7 +368,7 @@ TEST_P(IntegrationGpuBatchnormBackwardActivation3dFp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuBatchnormBackwardActivation3dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuBatchnormBackwardActivation3dFp16,
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuBatchnormBackwardActivation3dFp16,
                                       BnBwdActivTestCase>(
         testing::Combine(
             testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),

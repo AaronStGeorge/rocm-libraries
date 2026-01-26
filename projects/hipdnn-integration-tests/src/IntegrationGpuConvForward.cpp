@@ -11,7 +11,7 @@
 #include <hipdnn_test_sdk/utilities/TestUtilities.hpp>
 
 #include "common/ConvolutionCommon.hpp"
-#include "common/FilteredCombine.hpp"
+#include "common/BuildEngineTestMatrix.hpp"
 #include "IntegrationGraphVerificationHarness.hpp"
 
 using namespace hipdnn_frontend;
@@ -151,7 +151,7 @@ TEST_P(IntegrationGpuConvFwd3dFp16, Correctness)
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp32, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd2dFp32, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
@@ -159,7 +159,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dBfp16, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd2dBfp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
@@ -167,7 +167,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd2dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd2dFp16, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd2dFp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCHW, TensorLayout::NHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases4D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
@@ -176,7 +176,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp32,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp32, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd3dFp32, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
@@ -184,7 +184,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dBfp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dBfp16, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd3dBfp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
@@ -192,7 +192,7 @@ INSTANTIATE_TEST_SUITE_P(
 INSTANTIATE_TEST_SUITE_P(
     Smoke,
     IntegrationGpuConvFwd3dFp16,
-    testing::ValuesIn(FilteredCombine<IntegrationGpuConvFwd3dFp16, ConvFwdTestCase>(
+    testing::ValuesIn(BuildEngineTestMatrix<IntegrationGpuConvFwd3dFp16, ConvFwdTestCase>(
         testing::Combine(testing::Values(TensorLayout::NCDHW, TensorLayout::NDHWC),
                          testing::ValuesIn(test_conv_common::getConvTestCases5D())))),
     EngineTestNameGenerator<ConvFwdTestCase>);
